@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import ReconnectingWebSocket from '@opensumi/reconnecting-websocket';
+/* eslint-disable react-hooks/immutability */
 
-type Status = 'connected' | 'disconnected' | 'reconnecting';
+import { useCallback, useEffect, useRef } from 'react';
+import ReconnectingWebSocket from '@opensumi/reconnecting-websocket';
+import { useSignal } from '@preact/signals-react';
+
+export enum Status {
+  connected = 'connected',
+  disconnected = 'disconnected',
+  reconnecting = 'reconnecting',
+}
 
 export type Message = {
   id: string;
@@ -14,20 +21,22 @@ export const useWebSocket = () => {
   const wsRef = useRef<ReconnectingWebSocket | null>(null);
   const pendingQueue = useRef<Message[]>([]);
 
-  const [status, setStatus] = useState<Status>('disconnected');
-  const [messages, setMessages] = useState<Message[]>([]);
+  const status = useSignal<Status>(Status.disconnected);
+  const messages = useSignal<Message[]>([]);
 
   const flushQueue = useCallback(() => {
-    if (!wsRef.current) return;
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
-    pendingQueue.current.forEach((msg) => {
-      wsRef.current!.send(msg.text);
-      setMessages((prev) =>
-        prev.map((m) => (m.id === msg.id ? { ...m, pending: false } : m)),
-      );
-    });
+    const queue = pendingQueue.current;
+    if (queue.length === 0) return;
 
+    queue.forEach((msg) => ws.send(msg.text));
     pendingQueue.current = [];
+
+    messages.value = messages.value.map((m) =>
+      queue.some((q) => q.id === m.id) ? { ...m, pending: false } : m,
+    );
   }, []);
 
   useEffect(() => {
@@ -35,40 +44,44 @@ export const useWebSocket = () => {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      setStatus('connected');
+      status.value = Status.connected;
       flushQueue();
     };
 
-    ws.onclose = () => setStatus('reconnecting');
+    ws.onclose = () => {
+      status.value = Status.reconnecting;
+    };
 
     ws.onmessage = (event) => {
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), text: event.data, from: 'consultant' },
-      ]);
+      messages.value = [
+        ...messages.value,
+        {
+          id: crypto.randomUUID(),
+          text: event.data,
+          from: 'consultant',
+        },
+      ];
     };
 
     return () => ws.close();
   }, [flushQueue]);
 
   const sendMessage = useCallback((text: string) => {
+    const isOpen = wsRef.current?.readyState === WebSocket.OPEN;
+
     const msg: Message = {
       id: crypto.randomUUID(),
       text,
       from: 'me',
-      pending: false,
+      pending: !isOpen,
     };
 
-    setMessages((prev) => [...prev, msg]);
+    messages.value = [...messages.value, msg];
 
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(text);
+    if (isOpen) {
+      wsRef.current!.send(text);
     } else {
-      msg.pending = true;
       pendingQueue.current.push(msg);
-      setMessages((prev) =>
-        prev.map((m) => (m.id === msg.id ? { ...m, pending: true } : m)),
-      );
     }
   }, []);
 
