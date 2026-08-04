@@ -13,7 +13,6 @@ const STATUSES = {
 } as const;
 
 export default function Chat() {
-  console.log('rerendering');
   const { messages, status, sendMessage, retryPending } = useWebSocket();
 
   const input = useSignal('');
