@@ -12,9 +12,7 @@ export default async function ChatPage() {
   await queryClient.prefetchQuery({
     queryKey: ['meetings'],
     queryFn: () =>
-      fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/meetings`).then((res) =>
-        res.json(),
-      ),
+      fetch(`${process.env.BASE_URL}/api/meetings`).then((res) => res.json()),
   });
 
   return (

@@ -28,10 +28,7 @@ export default function MeetingsList() {
     isFetching,
   } = useQuery<Meeting[]>({
     queryKey: ['meetings'],
-    queryFn: () =>
-      fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/meetings`).then((res) =>
-        res.json(),
-      ),
+    queryFn: () => fetch('/api/meetings').then((res) => res.json()),
   });
 
   return (
